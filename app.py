@@ -336,45 +336,65 @@ def raster_stats(arr):
     }
 
 
-def raster_to_wgs84(arr, transform, crs, max_size=900):
+def raster_to_wgs84(arr, transform, crs, max_size=300):
     height, width = arr.shape
-    left, bottom, right, top = array_bounds(height, width, transform)
+
+    # rasterio 的 array_bounds 返回顺序是：west, south, east, north
+    west, south, east, north = array_bounds(height, width, transform)
 
     dst_transform, dst_width, dst_height = calculate_default_transform(
         crs,
         "EPSG:4326",
         width,
         height,
-        left,
-        bottom,
-        right,
-        top
+        west,
+        south,
+        east,
+        north
     )
 
+    # 控制网页显示尺寸，避免 Streamlit Cloud 卡顿
     max_dim = max(dst_width, dst_height)
     if max_dim > max_size:
         scale = max_dim / max_size
         new_width = max(1, int(dst_width / scale))
         new_height = max(1, int(dst_height / scale))
-        dst_transform = dst_transform * Affine.scale(dst_width / new_width, dst_height / new_height)
+
+        dst_transform = dst_transform * Affine.scale(
+            dst_width / new_width,
+            dst_height / new_height
+        )
+
         dst_width, dst_height = new_width, new_height
 
-    dst = np.full((dst_height, dst_width), np.nan, dtype="float32")
+    nodata_value = -9999.0
+
+    src_arr = arr.astype("float32")
+    src_arr = np.where(np.isfinite(src_arr), src_arr, nodata_value)
+
+    dst = np.full((dst_height, dst_width), nodata_value, dtype="float32")
 
     reproject(
-        source=arr.astype("float32"),
+        source=src_arr,
         destination=dst,
         src_transform=transform,
         src_crs=crs,
         dst_transform=dst_transform,
         dst_crs="EPSG:4326",
-        src_nodata=np.nan,
-        dst_nodata=np.nan,
+        src_nodata=nodata_value,
+        dst_nodata=nodata_value,
         resampling=Resampling.bilinear
     )
 
-    south, west, north, east = array_bounds(dst_height, dst_width, dst_transform)
-    return dst, [[south, west], [north, east]]
+    dst = np.where(dst == nodata_value, np.nan, dst)
+
+    # 这里也要注意顺序：west, south, east, north
+    west, south, east, north = array_bounds(dst_height, dst_width, dst_transform)
+
+    # Folium 需要的是 [[south, west], [north, east]]
+    bounds = [[south, west], [north, east]]
+
+    return dst, bounds
 
 
 def array_to_png_data_uri(arr, cmap_name="Blues", opacity=0.78):
