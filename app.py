@@ -175,12 +175,11 @@ st.markdown(
 # 3. 路径设置：GitHub 自动读取数据目录
 # =========================================================
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
 
-AUTO_BOUNDARY_DIR = DATA_DIR / "boundary"
-AUTO_PRECIP_DIR = DATA_DIR / "precip"
-AUTO_GW_DIR = DATA_DIR / "groundwater"
-AUTO_DEM_DIR = DATA_DIR / "dem"
+AUTO_BOUNDARY_DIR = BASE_DIR / "boundary"
+AUTO_PRECIP_DIR = BASE_DIR / "precip"
+AUTO_GW_DIR = BASE_DIR / "groundwater"
+AUTO_DEM_DIR = BASE_DIR / "dem"
 
 
 # =========================================================
