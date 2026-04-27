@@ -1,4 +1,12 @@
 streamlit
-pandas
+geopandas
+rasterio
+folium
+streamlit-folium
 plotly
-openpyxl
+matplotlib
+pillow
+shapely
+pyproj
+fiona
+affine
