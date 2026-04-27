@@ -10,3 +10,4 @@ shapely
 pyproj
 fiona
 affine
+statsmodels
