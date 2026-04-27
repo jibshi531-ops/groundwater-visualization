@@ -1020,25 +1020,30 @@ with st.expander("方法说明"):
         """
         本平台支持三种数据模式：
 
-        1. **GitHub 自动读取**：自动读取仓库 `data/` 目录中的 SHP zip、降水 TIF、地下水 TIF 和 DEM TIF；
+        1. **GitHub 自动读取**：自动读取仓库中的 SHP zip、降水 TIF、地下水 TIF 和 DEM TIF；
         2. **手动上传**：用户在网页左侧上传数据；
         3. **演示模式**：没有真实数据时展示页面效果。
 
-        推荐 GitHub 数据目录：
+        当前推荐 GitHub 数据目录结构：
 
         ```text
-        data/
-        ├─ boundary/
-        │  └─ gansu_boundary.zip
-        ├─ precip/
-        │  ├─ pre_2012.tif
-        │  └─ ...
-        ├─ groundwater/
-        │  ├─ GWs_2012.tif
-        │  └─ ...
-        └─ dem/
-           └─ dem_gansu.tif
+        boundary/
+        └─ gansu_boundary.zip
+
+        precip/
+        ├─ pre_2012.tif
+        ├─ pre_2013.tif
+        └─ ...
+
+        groundwater/
+        ├─ GWs_2012.tif
+        ├─ GWs_2013.tif
+        └─ ...
+
+        dem/
+        └─ dem_gansu.tif
         ```
 
         文件名里必须包含年份，例如 `2012`、`2013`，系统会自动按年份匹配降水和地下水 TIF。
         """
+    )
