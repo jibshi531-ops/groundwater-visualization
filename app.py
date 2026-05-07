@@ -768,22 +768,30 @@ with st.sidebar:
 st.markdown(
     """
     <div style="
-        font-size: 28px;
-        font-weight: 900;
-        color: #0f172a;
-        line-height: 1.35;
-        white-space: normal;
-        word-break: break-all;
-        margin-bottom: 6px;
+        width: 100%;
+        max-width: 1100px;
+        padding-top: 18px;
+        padding-bottom: 10px;
     ">
-        多源数据融合的地下水观测可视化平台设计与开发
-    </div>
-    <div style="
-        color: #475569;
-        font-size: 14px;
-        margin-bottom: 16px;
-    ">
-        自动读取 GitHub data 目录中的甘肃省边界、降水 TIF、地下水变化 TIF 和 DEM 高程数据
+        <div style="
+            font-size: 24px;
+            font-weight: 900;
+            color: #0f172a;
+            line-height: 1.55;
+            white-space: normal;
+            word-break: keep-all;
+        ">
+            多源数据融合的地下水观测可视化平台<br>
+            设计与开发
+        </div>
+        <div style="
+            color: #475569;
+            font-size: 13px;
+            margin-top: 6px;
+            line-height: 1.6;
+        ">
+            自动读取 GitHub data 目录中的甘肃省边界、降水 TIF、地下水变化 TIF 和 DEM 高程数据
+        </div>
     </div>
     """,
     unsafe_allow_html=True
