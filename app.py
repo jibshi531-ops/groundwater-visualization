@@ -1,8 +1,12 @@
+# -*- coding: utf-8 -*-
 """
-甘肃省地下水-降水-高程多源数据可视化平台
-版本：GitHub 自动读取数据 + 可选手动上传 + 演示模式
+Design and Development of a Groundwater Observation Visualization Platform
+Based on Multi-source Data Fusion
 
-推荐 GitHub 仓库结构：
+Version:
+GitHub auto data loading + optional manual upload + demo mode
+
+Recommended GitHub repository structure:
 
 groundwater-visualization/
 ├─ app.py
@@ -10,21 +14,20 @@ groundwater-visualization/
 ├─ packages.txt
 ├─ .streamlit/
 │  └─ config.toml
-└─ data/
-   ├─ boundary/
-   │  └─ gansu_boundary.zip
-   ├─ precip/
-   │  ├─ pre_2012_sum_clip.tif
-   │  ├─ pre_2013_sum_clip.tif
-   │  └─ ...
-   ├─ groundwater/
-   │  ├─ GWs_2012_mean_gansu.tif
-   │  ├─ GWs_2013_mean_gansu.tif
-   │  └─ ...
-   └─ dem/
-      └─ dem_gansu.tif
+├─ boundary/
+│  └─ gansu_boundary.zip
+├─ precip/
+│  ├─ pre_2012_sum_clip.tif
+│  ├─ pre_2013_sum_clip.tif
+│  └─ ...
+├─ groundwater/
+│  ├─ GWs_2012_mean_gansu.tif
+│  ├─ GWs_2013_mean_gansu.tif
+│  └─ ...
+└─ dem/
+   └─ dem_gansu.tif
 
-运行：
+Run:
 streamlit run app.py
 """
 
@@ -59,10 +62,10 @@ from PIL import Image
 
 
 # =========================================================
-# 1. 页面基础设置
+# 1. Page settings
 # =========================================================
 st.set_page_config(
-    page_title="甘肃省地下水-降水-高程多源数据可视化平台",
+    page_title="Groundwater Observation Visualization Platform Based on Multi-source Data Fusion",
     page_icon="💧",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -70,7 +73,7 @@ st.set_page_config(
 
 
 # =========================================================
-# 2. 页面 CSS 美化
+# 2. CSS style
 # =========================================================
 st.markdown(
     """
@@ -172,7 +175,7 @@ st.markdown(
 
 
 # =========================================================
-# 3. 路径设置：GitHub 自动读取数据目录
+# 3. Data directory settings
 # =========================================================
 BASE_DIR = Path(__file__).parent
 
@@ -183,7 +186,7 @@ AUTO_DEM_DIR = BASE_DIR / "dem"
 
 
 # =========================================================
-# 4. 工具函数
+# 4. Utility functions
 # =========================================================
 def safe_mkdir(path):
     os.makedirs(path, exist_ok=True)
@@ -205,7 +208,9 @@ def unzip_shp(zip_file_path, out_dir):
 
     shp_files = list(Path(out_dir).rglob("*.shp"))
     if not shp_files:
-        raise FileNotFoundError("zip 中没有找到 .shp 文件。请确认压缩包内包含 .shp/.shx/.dbf/.prj。")
+        raise FileNotFoundError(
+            "No .shp file was found in the ZIP file. Please make sure the ZIP contains .shp, .shx, .dbf and .prj files."
+        )
     return str(shp_files[0])
 
 
@@ -240,9 +245,6 @@ def save_tif_files(uploaded_files, out_dir):
 
 
 def find_auto_data():
-    """
-    自动查找 GitHub 仓库 data 目录中的数据。
-    """
     boundary_zip_list = sorted(list(AUTO_BOUNDARY_DIR.glob("*.zip")))
     pre_list = sorted(list(AUTO_PRECIP_DIR.glob("*.tif")) + list(AUTO_PRECIP_DIR.glob("*.tiff")))
     gw_list = sorted(list(AUTO_GW_DIR.glob("*.tif")) + list(AUTO_GW_DIR.glob("*.tiff")))
@@ -267,10 +269,10 @@ def read_boundary_from_zip_path(zip_path, work_dir):
     gdf = gpd.read_file(shp_path)
 
     if gdf.empty:
-        raise ValueError("边界 SHP 为空。")
+        raise ValueError("The boundary shapefile is empty.")
 
     if gdf.crs is None:
-        raise ValueError("边界 SHP 没有坐标系。请先在 ArcGIS/QGIS 中定义投影。")
+        raise ValueError("The boundary shapefile has no coordinate reference system.")
 
     return gdf.dissolve().reset_index(drop=True)
 
@@ -283,7 +285,7 @@ def read_boundary_from_uploaded_zip(uploaded_zip, work_dir):
 def crop_raster_by_boundary(raster_path, boundary_gdf):
     with rasterio.open(raster_path) as src:
         if src.crs is None:
-            raise ValueError(f"{Path(raster_path).name} 没有坐标系，请先定义投影。")
+            raise ValueError(f"{Path(raster_path).name} has no coordinate reference system.")
 
         boundary_in_raster_crs = boundary_gdf.to_crs(src.crs)
         geoms = [geom for geom in boundary_in_raster_crs.geometry if geom is not None]
@@ -318,28 +320,27 @@ def crop_raster_by_boundary(raster_path, boundary_gdf):
 
 def raster_stats(arr):
     valid = arr[np.isfinite(arr)]
+
     if valid.size == 0:
         return {
-            "均值": np.nan,
-            "最小值": np.nan,
-            "最大值": np.nan,
-            "标准差": np.nan,
-            "有效像元数": 0
+            "Mean": np.nan,
+            "Minimum": np.nan,
+            "Maximum": np.nan,
+            "Std": np.nan,
+            "Valid Pixels": 0
         }
 
     return {
-        "均值": float(np.nanmean(valid)),
-        "最小值": float(np.nanmin(valid)),
-        "最大值": float(np.nanmax(valid)),
-        "标准差": float(np.nanstd(valid)),
-        "有效像元数": int(valid.size)
+        "Mean": float(np.nanmean(valid)),
+        "Minimum": float(np.nanmin(valid)),
+        "Maximum": float(np.nanmax(valid)),
+        "Std": float(np.nanstd(valid)),
+        "Valid Pixels": int(valid.size)
     }
 
 
 def raster_to_wgs84(arr, transform, crs, max_size=300):
     height, width = arr.shape
-
-    # rasterio 的 array_bounds 返回顺序是：west, south, east, north
     west, south, east, north = array_bounds(height, width, transform)
 
     dst_transform, dst_width, dst_height = calculate_default_transform(
@@ -353,7 +354,6 @@ def raster_to_wgs84(arr, transform, crs, max_size=300):
         north
     )
 
-    # 控制网页显示尺寸，避免 Streamlit Cloud 卡顿
     max_dim = max(dst_width, dst_height)
     if max_dim > max_size:
         scale = max_dim / max_size
@@ -388,10 +388,7 @@ def raster_to_wgs84(arr, transform, crs, max_size=300):
 
     dst = np.where(dst == nodata_value, np.nan, dst)
 
-    # 这里也要注意顺序：west, south, east, north
     west, south, east, north = array_bounds(dst_height, dst_width, dst_transform)
-
-    # Folium 需要的是 [[south, west], [north, east]]
     bounds = [[south, west], [north, east]]
 
     return dst, bounds
@@ -431,7 +428,7 @@ def make_base_map(boundary_gdf):
     minx, miny, maxx, maxy = boundary_wgs.total_bounds
     center = [(miny + maxy) / 2, (minx + maxx) / 2]
 
-    # 纯白底图：不加载英文在线底图
+    # No online basemap is used, so there will be no English map labels.
     m = folium.Map(
         location=center,
         zoom_start=6,
@@ -441,21 +438,22 @@ def make_base_map(boundary_gdf):
         attribution_control=False
     )
 
-    # 添加白色背景框
-    folium.Rectangle(
-        bounds=[[miny - 2, minx - 2], [maxy + 2, maxx + 2]],
-        color="white",
-        fill=True,
-        fill_color="white",
-        fill_opacity=1,
-        weight=0,
-        interactive=False
-    ).add_to(m)
+    # White background without covering raster layers.
+    m.get_root().html.add_child(
+        folium.Element(
+            """
+            <style>
+            .leaflet-container {
+                background: #ffffff !important;
+            }
+            </style>
+            """
+        )
+    )
 
-    # 甘肃省边界
     folium.GeoJson(
         boundary_wgs,
-        name="甘肃省边界",
+        name="Gansu Boundary",
         style_function=lambda x: {
             "color": "#111827",
             "weight": 2,
@@ -487,10 +485,6 @@ def add_raster_layer(m, raster_path, boundary_gdf, layer_name, cmap_name, opacit
 
 @st.cache_data(show_spinner=False)
 def build_yearly_table_cached(pre_items, gw_items, dem_path, boundary_zip_path):
-    """
-    缓存自动读取数据的年度统计，提升网页刷新速度。
-    这里只对 GitHub 自动数据模式使用。
-    """
     with tempfile.TemporaryDirectory() as tmpdir:
         boundary_gdf = read_boundary_from_zip_path(boundary_zip_path, tmpdir)
         pre_dict = dict(pre_items)
@@ -514,13 +508,13 @@ def build_yearly_table(pre_dict, gw_dict, dem_path, boundary_gdf):
 
         records.append(
             {
-                "年份": year,
-                "降水量(mm)": pre_stats["均值"],
-                "地下水变化量(m)": gw_stats["均值"],
-                "平均高程(m)": dem_stats["均值"],
-                "高程最小值(m)": dem_stats["最小值"],
-                "高程最大值(m)": dem_stats["最大值"],
-                "有效像元数": min(pre_stats["有效像元数"], gw_stats["有效像元数"])
+                "Year": year,
+                "Precipitation (mm)": pre_stats["Mean"],
+                "Groundwater Value": gw_stats["Mean"],
+                "Mean Elevation (m)": dem_stats["Mean"],
+                "Minimum Elevation (m)": dem_stats["Minimum"],
+                "Maximum Elevation (m)": dem_stats["Maximum"],
+                "Valid Pixels": min(pre_stats["Valid Pixels"], gw_stats["Valid Pixels"])
             }
         )
 
@@ -530,20 +524,20 @@ def build_yearly_table(pre_dict, gw_dict, dem_path, boundary_gdf):
 def groundwater_pie_df(arr, threshold=0.1):
     valid = arr[np.isfinite(arr)]
     if valid.size == 0:
-        return pd.DataFrame({"类型": [], "像元数": []})
+        return pd.DataFrame({"Class": [], "Pixels": []})
 
-    up = np.sum(valid > threshold)
+    high = np.sum(valid > threshold)
     stable = np.sum((valid >= -threshold) & (valid <= threshold))
-    down = np.sum(valid < -threshold)
+    low = np.sum(valid < -threshold)
 
     return pd.DataFrame(
         {
-            "类型": [
-                f"上升区（>{threshold}）",
-                f"稳定区（-{threshold}~{threshold}）",
-                f"下降区（<-{threshold}）"
+            "Class": [
+                f"High Zone (> {threshold})",
+                f"Stable Zone (-{threshold} to {threshold})",
+                f"Low Zone (< -{threshold})"
             ],
-            "像元数": [up, stable, down]
+            "Pixels": [high, stable, low]
         }
     )
 
@@ -551,7 +545,7 @@ def groundwater_pie_df(arr, threshold=0.1):
 def elevation_pie_df(arr):
     valid = arr[np.isfinite(arr)]
     if valid.size == 0:
-        return pd.DataFrame({"类型": [], "像元数": []})
+        return pd.DataFrame({"Class": [], "Pixels": []})
 
     q1, q2, q3 = np.nanpercentile(valid, [25, 50, 75])
 
@@ -563,13 +557,13 @@ def elevation_pie_df(arr):
     ]
 
     names = [
-        f"低高程区 ≤{q1:.0f}m",
-        f"中低高程区 {q1:.0f}-{q2:.0f}m",
-        f"中高高程区 {q2:.0f}-{q3:.0f}m",
-        f"高高程区 >{q3:.0f}m"
+        f"Low Elevation ≤ {q1:.0f} m",
+        f"Lower-middle Elevation {q1:.0f}-{q2:.0f} m",
+        f"Upper-middle Elevation {q2:.0f}-{q3:.0f} m",
+        f"High Elevation > {q3:.0f} m"
     ]
 
-    return pd.DataFrame({"类型": names, "像元数": zones})
+    return pd.DataFrame({"Class": names, "Pixels": zones})
 
 
 def demo_dataframe():
@@ -580,19 +574,38 @@ def demo_dataframe():
 
     return pd.DataFrame(
         {
-            "年份": years,
-            "降水量(mm)": rainfall,
-            "地下水变化量(m)": groundwater,
-            "平均高程(m)": elevation,
-            "高程最小值(m)": [650.0] * 10,
-            "高程最大值(m)": [4800.0] * 10,
-            "有效像元数": [10000] * 10
+            "Year": years,
+            "Precipitation (mm)": rainfall,
+            "Groundwater Value": groundwater,
+            "Mean Elevation (m)": elevation,
+            "Minimum Elevation (m)": [650.0] * 10,
+            "Maximum Elevation (m)": [4800.0] * 10,
+            "Valid Pixels": [10000] * 10
         }
     )
 
 
 def demo_map():
-    m = folium.Map(location=[38.5, 101.5], zoom_start=6, tiles="CartoDB positron", control_scale=True)
+    m = folium.Map(
+        location=[38.5, 101.5],
+        zoom_start=6,
+        tiles=None,
+        control_scale=True,
+        zoom_control=True,
+        attribution_control=False
+    )
+
+    m.get_root().html.add_child(
+        folium.Element(
+            """
+            <style>
+            .leaflet-container {
+                background: #ffffff !important;
+            }
+            </style>
+            """
+        )
+    )
 
     polygon = [
         [40.0, 93.5],
@@ -616,7 +629,7 @@ def demo_map():
         fill=True,
         fill_color="#60a5fa",
         fill_opacity=0.45,
-        tooltip="甘肃省示意范围"
+        tooltip="Gansu Demo Area"
     ).add_to(m)
 
     folium.LayerControl(collapsed=False).add_to(m)
@@ -632,7 +645,7 @@ def card_end():
 
 
 # =========================================================
-# 5. 左侧栏：数据模式和控制
+# 5. Sidebar controls
 # =========================================================
 auto_info = find_auto_data()
 auto_data_ready = (
@@ -643,28 +656,28 @@ auto_data_ready = (
 )
 
 with st.sidebar:
-    st.markdown("## 数据来源")
+    st.markdown("## Data Source")
 
     if auto_data_ready:
-        default_mode = "GitHub 自动读取"
+        default_mode = "GitHub Auto Loading"
     else:
-        default_mode = "演示模式"
+        default_mode = "Demo Mode"
 
     data_mode = st.radio(
-        "选择数据模式",
-        ["GitHub 自动读取", "手动上传", "演示模式"],
-        index=["GitHub 自动读取", "手动上传", "演示模式"].index(default_mode)
+        "Select Data Mode",
+        ["GitHub Auto Loading", "Manual Upload", "Demo Mode"],
+        index=["GitHub Auto Loading", "Manual Upload", "Demo Mode"].index(default_mode)
     )
 
     if auto_data_ready:
         st.markdown(
             f"""
             <div class="success-box">
-            已检测到 GitHub 数据：<br>
-            边界 ZIP：{auto_info['counts']['boundary_zip']} 个<br>
-            降水 TIF：{auto_info['counts']['precip_tif']} 个<br>
-            地下水 TIF：{auto_info['counts']['groundwater_tif']} 个<br>
-            DEM TIF：{auto_info['counts']['dem_tif']} 个
+            GitHub data detected:<br>
+            Boundary ZIP: {auto_info['counts']['boundary_zip']}<br>
+            Precipitation TIF: {auto_info['counts']['precip_tif']}<br>
+            Groundwater TIF: {auto_info['counts']['groundwater_tif']}<br>
+            DEM TIF: {auto_info['counts']['dem_tif']}
             </div>
             """,
             unsafe_allow_html=True
@@ -673,7 +686,7 @@ with st.sidebar:
         st.markdown(
             """
             <div class="warning-box">
-            未检测到完整 GitHub 数据。请检查 data/boundary、data/precip、data/groundwater、data/dem 目录。
+            Complete GitHub data was not detected. Please check the boundary, precip, groundwater and dem folders.
             </div>
             """,
             unsafe_allow_html=True
@@ -684,77 +697,77 @@ with st.sidebar:
     gw_files_upload = None
     dem_file_upload = None
 
-    if data_mode == "手动上传":
-        st.markdown("## 手动上传")
+    if data_mode == "Manual Upload":
+        st.markdown("## Manual Upload")
 
         boundary_zip_upload = st.file_uploader(
-            "1. 上传甘肃省边界 SHP 压缩包（zip）",
+            "1. Upload Boundary SHP ZIP",
             type=["zip"]
         )
 
         pre_files_upload = st.file_uploader(
-            "2. 上传降水 TIF 文件",
+            "2. Upload Precipitation TIF Files",
             type=["tif", "tiff"],
             accept_multiple_files=True
         )
 
         gw_files_upload = st.file_uploader(
-            "3. 上传地下水变化 TIF 文件",
+            "3. Upload Groundwater TIF Files",
             type=["tif", "tiff"],
             accept_multiple_files=True
         )
 
         dem_file_upload = st.file_uploader(
-            "4. 上传 DEM 高程 TIF 文件",
+            "4. Upload DEM TIF File",
             type=["tif", "tiff"]
         )
 
-    st.markdown("## 显示设置")
+    st.markdown("## Display Settings")
 
     available_years = sorted(set(auto_info["pre_dict"].keys()) & set(auto_info["gw_dict"].keys()))
     if not available_years:
         available_years = list(range(2012, 2022))
 
     selected_year_sidebar = st.selectbox(
-        "选择年份",
+        "Select Year",
         available_years,
         index=len(available_years) - 1
     )
 
     layer_choice = st.radio(
-        "底图选择",
-        ["降水图", "地下水变化图", "高程图", "三图叠加"],
+        "Layer Selection",
+        ["Precipitation", "Groundwater", "Elevation", "Overlay All"],
         index=0
     )
 
-    opacity = st.slider("透明度", 0.1, 1.0, 0.75, 0.05)
+    opacity = st.slider("Layer Opacity", 0.1, 1.0, 0.75, 0.05)
 
     stable_threshold = st.number_input(
-        "地下水稳定阈值",
+        "Groundwater Stability Threshold",
         min_value=0.0,
         value=0.10,
         step=0.05,
-        help="例如 ±0.10m 内可视为基本稳定。"
+        help="Values within ±0.10 can be regarded as relatively stable."
     )
 
 
 # =========================================================
-# 6. 标题区
+# 6. Title area
 # =========================================================
-st.markdown("### 甘肃省地下水-降水-高程多源数据可视化平台")
+st.markdown("### Groundwater Observation Visualization Platform Based on Multi-source Data Fusion")
 st.markdown(
-    '<div class="small-subtitle">自动读取 GitHub data 目录中的甘肃省边界、降水 TIF、地下水变化 TIF 和 DEM 高程数据</div>',
+    '<div class="small-subtitle">A multi-source visualization platform for groundwater, precipitation and elevation data in Gansu Province</div>',
     unsafe_allow_html=True
 )
 
 
 # =========================================================
-# 7. 主体渲染函数
+# 7. Dashboard renderer
 # =========================================================
 def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, source_note, use_cache_table=False, boundary_zip_path=None):
     common_years = sorted(set(pre_dict.keys()) & set(gw_dict.keys()))
     if len(common_years) == 0:
-        st.error("降水 TIF 和地下水变化 TIF 没有匹配年份，请检查文件名是否包含相同年份。")
+        st.error("No matching years were found between precipitation TIF files and groundwater TIF files.")
         st.stop()
 
     if selected_year not in common_years:
@@ -766,22 +779,22 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
     current_gw_arr = None
     current_dem_arr = None
 
-    if layer_choice in ["降水图", "三图叠加"]:
+    if layer_choice in ["Precipitation", "Overlay All"]:
         current_pre_arr = add_raster_layer(
             fmap, pre_dict[selected_year], boundary_gdf,
-            f"{selected_year} 年降水量", "Blues", opacity
+            f"{selected_year} Precipitation", "Blues", opacity
         )
 
-    if layer_choice in ["地下水变化图", "三图叠加"]:
+    if layer_choice in ["Groundwater", "Overlay All"]:
         current_gw_arr = add_raster_layer(
             fmap, gw_dict[selected_year], boundary_gdf,
-            f"{selected_year} 年地下水变化", "RdYlBu", opacity
+            f"{selected_year} Groundwater", "RdYlBu", opacity
         )
 
-    if layer_choice in ["高程图", "三图叠加"]:
+    if layer_choice in ["Elevation", "Overlay All"]:
         current_dem_arr = add_raster_layer(
             fmap, dem_path, boundary_gdf,
-            "DEM 高程", "terrain", opacity
+            "DEM Elevation", "terrain", opacity
         )
 
     folium.LayerControl(collapsed=False).add_to(fmap)
@@ -808,33 +821,45 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
 
     top1, top2, top3, top4 = st.columns(4)
     with top1:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">匹配年份</div><div class="metric-value">{len(common_years)} 年</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric-card"><div class="metric-label">Matched Years</div><div class="metric-value">{len(common_years)}</div></div>',
+            unsafe_allow_html=True
+        )
     with top2:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">当前年份</div><div class="metric-value">{selected_year}</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric-card"><div class="metric-label">Current Year</div><div class="metric-value">{selected_year}</div></div>',
+            unsafe_allow_html=True
+        )
     with top3:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">降水均值</div><div class="metric-value">{pre_stats["均值"]:.2f}</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric-card"><div class="metric-label">Mean Precipitation</div><div class="metric-value">{pre_stats["Mean"]:.2f}</div></div>',
+            unsafe_allow_html=True
+        )
     with top4:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">地下水变化均值</div><div class="metric-value">{gw_stats["均值"]:.3f}</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric-card"><div class="metric-label">Mean Groundwater Value</div><div class="metric-value">{gw_stats["Mean"]:.3f}</div></div>',
+            unsafe_allow_html=True
+        )
 
     row1_col1, row1_col2 = st.columns([1.06, 1.72])
 
     with row1_col1:
-        card_start(f"甘肃省空间数据展示（{selected_year}年）")
+        card_start(f"Spatial Data Display in Gansu Province ({selected_year})")
         st_folium(fmap, width=None, height=430)
         st.markdown(f'<div class="footer-note">{source_note}</div>', unsafe_allow_html=True)
         card_end()
 
     with row1_col2:
-        card_start("10 年变化趋势")
+        card_start("Multi-year Change Trend")
         chart_a, chart_b = st.columns(2)
 
         with chart_a:
             fig_rain = px.line(
                 yearly_df,
-                x="年份",
-                y="降水量(mm)",
+                x="Year",
+                y="Precipitation (mm)",
                 markers=True,
-                title="年降水量变化趋势"
+                title="Annual Precipitation Trend"
             )
             fig_rain.update_layout(height=330, margin=dict(l=10, r=10, t=50, b=10))
             st.plotly_chart(fig_rain, use_container_width=True)
@@ -842,10 +867,10 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
         with chart_b:
             fig_gw = px.line(
                 yearly_df,
-                x="年份",
-                y="地下水变化量(m)",
+                x="Year",
+                y="Groundwater Value",
                 markers=True,
-                title="年地下水变化趋势"
+                title="Annual Groundwater Trend"
             )
             fig_gw.add_hline(y=0, line_dash="dash", line_color="gray")
             fig_gw.update_layout(height=330, margin=dict(l=10, r=10, t=50, b=10))
@@ -856,32 +881,32 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
     row2_col1, row2_col2 = st.columns([1, 1])
 
     with row2_col1:
-        card_start(f"降水量 vs 地下水变化（{yearly_df['年份'].min()}-{yearly_df['年份'].max()}）")
+        card_start(f"Precipitation vs Groundwater ({yearly_df['Year'].min()}-{yearly_df['Year'].max()})")
         if len(yearly_df) >= 2:
-            corr = yearly_df[["降水量(mm)", "地下水变化量(m)"]].corr().iloc[0, 1]
+            corr = yearly_df[["Precipitation (mm)", "Groundwater Value"]].corr().iloc[0, 1]
         else:
             corr = np.nan
 
         fig_scatter = px.scatter(
             yearly_df,
-            x="降水量(mm)",
-            y="地下水变化量(m)",
-            text="年份",
+            x="Precipitation (mm)",
+            y="Groundwater Value",
+            text="Year",
             trendline="ols" if len(yearly_df) >= 3 else None
         )
         fig_scatter.update_traces(textposition="top center", marker=dict(size=10))
         fig_scatter.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_scatter, use_container_width=True)
-        st.caption(f"相关系数：{corr:.3f}" if np.isfinite(corr) else "相关系数：样本不足")
+        st.caption(f"Correlation Coefficient: {corr:.3f}" if np.isfinite(corr) else "Correlation Coefficient: insufficient samples")
         card_end()
 
     with row2_col2:
-        card_start("地下水变化分区占比")
+        card_start("Groundwater Classification Proportion")
         pie_df = groundwater_pie_df(current_gw_arr, stable_threshold)
         fig_pie = px.pie(
             pie_df,
-            names="类型",
-            values="像元数",
+            names="Class",
+            values="Pixels",
             hole=0.45
         )
         fig_pie.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
@@ -891,7 +916,7 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
     row3_col1, row3_col2 = st.columns([1.38, 1])
 
     with row3_col1:
-        card_start("多源数据融合统计表（区域平均值）")
+        card_start("Multi-source Data Fusion Table")
         show_df = yearly_df.copy()
         numeric_cols = show_df.select_dtypes(include=["float", "float64"]).columns
         show_df[numeric_cols] = show_df[numeric_cols].round(3)
@@ -899,20 +924,20 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
 
         csv = show_df.to_csv(index=False, encoding="utf-8-sig")
         st.download_button(
-            "导出 CSV",
+            "Export CSV",
             data=csv,
-            file_name="甘肃省_降水_地下水_高程_融合统计表.csv",
+            file_name="gansu_multisource_fusion_statistics.csv",
             mime="text/csv"
         )
         card_end()
 
     with row3_col2:
-        card_start("高程分区占比")
+        card_start("Elevation Zone Proportion")
         elev_df = elevation_pie_df(current_dem_arr)
         fig_elev = px.pie(
             elev_df,
-            names="类型",
-            values="像元数"
+            names="Class",
+            values="Pixels"
         )
         fig_elev.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_elev, use_container_width=True)
@@ -920,12 +945,12 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
 
 
 # =========================================================
-# 8. 主程序
+# 8. Main program
 # =========================================================
 try:
-    if data_mode == "GitHub 自动读取":
+    if data_mode == "GitHub Auto Loading":
         if not auto_data_ready:
-            st.error("GitHub data 目录中的数据不完整。请检查 data/boundary、data/precip、data/groundwater、data/dem。")
+            st.error("GitHub data is incomplete. Please check the boundary, precip, groundwater and dem folders.")
             st.stop()
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -936,14 +961,14 @@ try:
                 gw_dict=auto_info["gw_dict"],
                 dem_path=auto_info["dem_path"],
                 selected_year=selected_year_sidebar,
-                source_note="当前使用 GitHub 仓库 data 目录中的内置数据，用户打开网页即可查看。",
+                source_note="Built-in data from the GitHub repository is currently used.",
                 use_cache_table=True,
                 boundary_zip_path=auto_info["boundary_zip"]
             )
 
-    elif data_mode == "手动上传":
+    elif data_mode == "Manual Upload":
         if not all([boundary_zip_upload, pre_files_upload, gw_files_upload, dem_file_upload]):
-            st.info("请在左侧上传边界 zip、降水 TIF、地下水 TIF 和 DEM TIF。")
+            st.info("Please upload the boundary ZIP, precipitation TIF files, groundwater TIF files and DEM TIF file from the sidebar.")
             st.stop()
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -959,48 +984,48 @@ try:
                 gw_dict=gw_dict,
                 dem_path=dem_path,
                 selected_year=selected_year_sidebar,
-                source_note="当前使用手动上传数据。"
+                source_note="Manual uploaded data is currently used."
             )
 
     else:
         st.markdown(
-            '<div class="warning-box">当前为演示模式：页面使用模拟数据展示效果。上传或放入 GitHub 数据后，可切换为真实数据模式。</div>',
+            '<div class="warning-box">Demo Mode: simulated data is used for interface demonstration.</div>',
             unsafe_allow_html=True
         )
 
         yearly_df = demo_dataframe()
-        selected_year = selected_year_sidebar if selected_year_sidebar in yearly_df["年份"].tolist() else yearly_df["年份"].iloc[-1]
+        selected_year = selected_year_sidebar if selected_year_sidebar in yearly_df["Year"].tolist() else yearly_df["Year"].iloc[-1]
 
         top1, top2, top3, top4 = st.columns(4)
         with top1:
-            st.markdown('<div class="metric-card"><div class="metric-label">匹配年份</div><div class="metric-value">10 年</div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="metric-card"><div class="metric-label">Matched Years</div><div class="metric-value">10</div></div>', unsafe_allow_html=True)
         with top2:
-            st.markdown(f'<div class="metric-card"><div class="metric-label">当前年份</div><div class="metric-value">{selected_year}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Current Year</div><div class="metric-value">{selected_year}</div></div>', unsafe_allow_html=True)
         with top3:
-            value = yearly_df.loc[yearly_df["年份"] == selected_year, "降水量(mm)"].iloc[0]
-            st.markdown(f'<div class="metric-card"><div class="metric-label">降水均值</div><div class="metric-value">{value:.1f} mm</div></div>', unsafe_allow_html=True)
+            value = yearly_df.loc[yearly_df["Year"] == selected_year, "Precipitation (mm)"].iloc[0]
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Mean Precipitation</div><div class="metric-value">{value:.1f} mm</div></div>', unsafe_allow_html=True)
         with top4:
-            value = yearly_df.loc[yearly_df["年份"] == selected_year, "地下水变化量(m)"].iloc[0]
-            st.markdown(f'<div class="metric-card"><div class="metric-label">地下水变化均值</div><div class="metric-value">{value:.2f} m</div></div>', unsafe_allow_html=True)
+            value = yearly_df.loc[yearly_df["Year"] == selected_year, "Groundwater Value"].iloc[0]
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Mean Groundwater Value</div><div class="metric-value">{value:.2f}</div></div>', unsafe_allow_html=True)
 
         row1_col1, row1_col2 = st.columns([1.06, 1.72])
 
         with row1_col1:
-            card_start(f"甘肃省空间数据展示（{selected_year}年）")
+            card_start(f"Spatial Data Display in Gansu Province ({selected_year})")
             st_folium(demo_map(), width=None, height=430)
             card_end()
 
         with row1_col2:
-            card_start("10 年变化趋势")
+            card_start("Multi-year Change Trend")
             chart_a, chart_b = st.columns(2)
 
             with chart_a:
-                fig_rain = px.line(yearly_df, x="年份", y="降水量(mm)", markers=True, title="年降水量变化趋势")
+                fig_rain = px.line(yearly_df, x="Year", y="Precipitation (mm)", markers=True, title="Annual Precipitation Trend")
                 fig_rain.update_layout(height=330, margin=dict(l=10, r=10, t=50, b=10))
                 st.plotly_chart(fig_rain, use_container_width=True)
 
             with chart_b:
-                fig_gw = px.line(yearly_df, x="年份", y="地下水变化量(m)", markers=True, title="年地下水变化趋势")
+                fig_gw = px.line(yearly_df, x="Year", y="Groundwater Value", markers=True, title="Annual Groundwater Trend")
                 fig_gw.add_hline(y=0, line_dash="dash", line_color="gray")
                 fig_gw.update_layout(height=330, margin=dict(l=10, r=10, t=50, b=10))
                 st.plotly_chart(fig_gw, use_container_width=True)
@@ -1010,19 +1035,19 @@ try:
         row2_col1, row2_col2 = st.columns([1, 1])
 
         with row2_col1:
-            card_start("降水量 vs 地下水变化")
-            corr = yearly_df[["降水量(mm)", "地下水变化量(m)"]].corr().iloc[0, 1]
-            fig_scatter = px.scatter(yearly_df, x="降水量(mm)", y="地下水变化量(m)", text="年份", trendline="ols")
+            card_start("Precipitation vs Groundwater")
+            corr = yearly_df[["Precipitation (mm)", "Groundwater Value"]].corr().iloc[0, 1]
+            fig_scatter = px.scatter(yearly_df, x="Precipitation (mm)", y="Groundwater Value", text="Year", trendline="ols")
             fig_scatter.update_traces(textposition="top center", marker=dict(size=10))
             fig_scatter.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_scatter, use_container_width=True)
-            st.caption(f"相关系数：{corr:.3f}")
+            st.caption(f"Correlation Coefficient: {corr:.3f}")
             card_end()
 
         with row2_col2:
-            card_start("地下水变化分区占比")
-            pie_df = pd.DataFrame({"类型": ["上升区", "稳定区", "下降区"], "像元数": [2830, 4670, 2500]})
-            fig_pie = px.pie(pie_df, names="类型", values="像元数", hole=0.45)
+            card_start("Groundwater Classification Proportion")
+            pie_df = pd.DataFrame({"Class": ["High Zone", "Stable Zone", "Low Zone"], "Pixels": [2830, 4670, 2500]})
+            fig_pie = px.pie(pie_df, names="Class", values="Pixels", hole=0.45)
             fig_pie.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_pie, use_container_width=True)
             card_end()
@@ -1030,36 +1055,36 @@ try:
         row3_col1, row3_col2 = st.columns([1.38, 1])
 
         with row3_col1:
-            card_start("多源数据融合统计表（区域平均值）")
+            card_start("Multi-source Data Fusion Table")
             st.dataframe(yearly_df.round(3), use_container_width=True, height=310)
             card_end()
 
         with row3_col2:
-            card_start("高程分区占比")
-            elev_df = pd.DataFrame({"类型": [">3000m", "2000-3000m", "1000-2000m", "<1000m"], "像元数": [2750, 3510, 2480, 1260]})
-            fig_elev = px.pie(elev_df, names="类型", values="像元数")
+            card_start("Elevation Zone Proportion")
+            elev_df = pd.DataFrame({"Class": [">3000 m", "2000-3000 m", "1000-2000 m", "<1000 m"], "Pixels": [2750, 3510, 2480, 1260]})
+            fig_elev = px.pie(elev_df, names="Class", values="Pixels")
             fig_elev.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_elev, use_container_width=True)
             card_end()
 
 except Exception as e:
-    st.error("程序运行出错，请检查 SHP/TIF 坐标系、文件格式、文件名年份是否正确。")
+    st.error("Program error. Please check the coordinate system, file format and year information in the filenames.")
     st.exception(e)
 
 
 # =========================================================
-# 9. 底部说明
+# 9. Method description
 # =========================================================
-with st.expander("方法说明"):
+with st.expander("Method Description"):
     st.markdown(
         """
-        本平台支持三种数据模式：
+        This platform supports three data modes:
 
-        1. **GitHub 自动读取**：自动读取仓库中的 SHP zip、降水 TIF、地下水 TIF 和 DEM TIF；
-        2. **手动上传**：用户在网页左侧上传数据；
-        3. **演示模式**：没有真实数据时展示页面效果。
+        1. **GitHub Auto Loading**: automatically reads boundary ZIP, precipitation TIF files, groundwater TIF files and DEM TIF files from the repository;
+        2. **Manual Upload**: users can upload spatial data from the sidebar;
+        3. **Demo Mode**: simulated data is used when real data is not available.
 
-        当前推荐 GitHub 数据目录结构：
+        Recommended GitHub data structure:
 
         ```text
         boundary/
@@ -1079,6 +1104,6 @@ with st.expander("方法说明"):
         └─ dem_gansu.tif
         ```
 
-        文件名里必须包含年份，例如 `2012`、`2013`，系统会自动按年份匹配降水和地下水 TIF。
+        Filenames should contain year information, such as `2012` or `2013`, so that the system can automatically match precipitation and groundwater TIF files by year.
         """
     )
