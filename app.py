@@ -76,7 +76,7 @@ st.markdown(
     """
     <style>
     .block-container {
-        padding-top: 1.2rem;
+        padding-top: 3.5rem;
         padding-bottom: 1rem;
         padding-left: 1.5rem;
         padding-right: 1.5rem;
@@ -769,26 +769,29 @@ st.markdown(
     """
     <div style="
         width: 100%;
-        padding-top: 14px;
+        margin-top: 70px;
+        margin-bottom: 18px;
+        padding-top: 10px;
         padding-bottom: 10px;
         overflow: visible;
     ">
         <div style="
-            font-size: 18px;
+            font-size: 24px;
             font-weight: 900;
             color: #0f172a;
-            line-height: 1.35;
-            white-space: nowrap;
+            line-height: 1.8;
+            white-space: normal;
+            word-break: keep-all;
             overflow: visible;
         ">
             多源数据融合的地下水观测可视化平台设计与开发
         </div>
         <div style="
             color: #475569;
-            font-size: 13px;
-            margin-top: 6px;
-            line-height: 1.6;
-            white-space: nowrap;
+            font-size: 14px;
+            margin-top: 4px;
+            line-height: 1.8;
+            white-space: normal;
         ">
             自动读取 GitHub data 目录中的甘肃省边界、降水 TIF、地下水变化 TIF 和 DEM 高程数据
         </div>
@@ -796,6 +799,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 
 # =========================================================
 # 7. 主体渲染函数
