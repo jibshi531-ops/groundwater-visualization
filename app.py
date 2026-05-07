@@ -765,9 +765,27 @@ with st.sidebar:
 # =========================================================
 # 6. 标题区
 # =========================================================
-st.markdown("### 多源数据融合的地下水观测可视化平台设计与开发")
 st.markdown(
-    '<div class="small-subtitle">自动读取 GitHub data 目录中的甘肃省边界、降水 TIF、地下水变化 TIF 和 DEM 高程数据</div>',
+    """
+    <div style="
+        font-size: 28px;
+        font-weight: 900;
+        color: #0f172a;
+        line-height: 1.35;
+        white-space: normal;
+        word-break: break-all;
+        margin-bottom: 6px;
+    ">
+        多源数据融合的地下水观测可视化平台设计与开发
+    </div>
+    <div style="
+        color: #475569;
+        font-size: 14px;
+        margin-bottom: 16px;
+    ">
+        自动读取 GitHub data 目录中的甘肃省边界、降水 TIF、地下水变化 TIF 和 DEM 高程数据
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
@@ -896,7 +914,6 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
         fig_scatter.update_traces(textposition="top center", marker=dict(size=10))
         fig_scatter.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_scatter, use_container_width=True, config=PLOTLY_CONFIG)
-        st.caption(f"相关系数：{corr:.3f}" if np.isfinite(corr) else "相关系数：样本不足")
         card_end()
 
     with row2_col2:
@@ -1040,7 +1057,6 @@ try:
             fig_scatter.update_traces(textposition="top center", marker=dict(size=10))
             fig_scatter.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_scatter, use_container_width=True, config=PLOTLY_CONFIG)
-            st.caption(f"相关系数：{corr:.3f}")
             card_end()
 
         with row2_col2:
