@@ -431,13 +431,28 @@ def make_base_map(boundary_gdf):
     minx, miny, maxx, maxy = boundary_wgs.total_bounds
     center = [(miny + maxy) / 2, (minx + maxx) / 2]
 
+    # 纯白底图：不加载英文在线底图
     m = folium.Map(
         location=center,
         zoom_start=6,
-        tiles="CartoDB positron",
-        control_scale=True
+        tiles=None,
+        control_scale=True,
+        zoom_control=True,
+        attribution_control=False
     )
 
+    # 添加白色背景框
+    folium.Rectangle(
+        bounds=[[miny - 2, minx - 2], [maxy + 2, maxx + 2]],
+        color="white",
+        fill=True,
+        fill_color="white",
+        fill_opacity=1,
+        weight=0,
+        interactive=False
+    ).add_to(m)
+
+    # 甘肃省边界
     folium.GeoJson(
         boundary_wgs,
         name="甘肃省边界",
