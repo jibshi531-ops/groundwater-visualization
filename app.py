@@ -401,6 +401,95 @@ def array_to_png_data_uri(arr, cmap_name="Blues", opacity=0.78):
     return f"data:image/png;base64,{encoded}"
 
 
+
+def add_north_arrow_and_scale(m):
+    """
+    在 Folium 地图中添加指北针和动态比例尺。
+    比例尺使用 Leaflet 原生比例尺，只显示 metric，隐藏 miles。
+    """
+    map_name = m.get_name()
+
+    control_html = f"""
+    <style>
+    .custom-north-arrow {{
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        z-index: 9999;
+        width: 54px;
+        height: 82px;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #9ca3af;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        pointer-events: none;
+    }}
+    .custom-north-arrow .north-text {{
+        font-size: 18px;
+        font-weight: 800;
+        color: #111827;
+        line-height: 1;
+        margin-bottom: 4px;
+    }}
+    .custom-north-arrow .north-triangle {{
+        width: 0;
+        height: 0;
+        border-left: 13px solid transparent;
+        border-right: 13px solid transparent;
+        border-bottom: 34px solid #111827;
+    }}
+    .custom-north-arrow .north-line {{
+        width: 3px;
+        height: 16px;
+        background: #111827;
+        margin-top: -1px;
+    }}
+    .leaflet-control-scale {{
+        margin-left: 14px !important;
+        margin-bottom: 14px !important;
+    }}
+    .leaflet-control-scale-line {{
+        background: rgba(255,255,255,0.92) !important;
+        border: 2px solid #111827 !important;
+        border-top: none !important;
+        color: #111827 !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        line-height: 1.2 !important;
+        padding: 3px 6px 4px 6px !important;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15) !important;
+    }}
+    </style>
+
+    <div class="custom-north-arrow">
+        <div class="north-text">N</div>
+        <div class="north-triangle"></div>
+        <div class="north-line"></div>
+    </div>
+
+    <script>
+    setTimeout(function() {{
+        if (typeof {map_name} !== "undefined") {{
+            L.control.scale({{
+                position: "bottomleft",
+                metric: true,
+                imperial: false,
+                maxWidth: 160
+            }}).addTo({map_name});
+        }}
+    }}, 300);
+    </script>
+    """
+
+    m.get_root().html.add_child(folium.Element(control_html))
+    return m
+
+
 def make_base_map(boundary_gdf):
     boundary_wgs = boundary_gdf.to_crs(epsg=4326)
     minx, miny, maxx, maxy = boundary_wgs.total_bounds
@@ -440,6 +529,7 @@ def make_base_map(boundary_gdf):
     ).add_to(m)
 
     m.fit_bounds([[miny, minx], [maxy, maxx]])
+    add_north_arrow_and_scale(m)
     return m
 
 
