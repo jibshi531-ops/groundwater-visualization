@@ -381,10 +381,11 @@ def add_north_arrow_and_scale(m):
 
     control_html = f"""
     <style>
+    /* 指北针样式：固定在左上角，向右偏移 60px 完美避开缩放面板 */
     .custom-north-arrow {{
         position: absolute;
-        top: 18px;
-        right: 18px;
+        top: 12px;
+        left: 60px;
         z-index: 9999;
         width: 54px;
         height: 82px;
@@ -419,19 +420,26 @@ def add_north_arrow_and_scale(m):
         background: #0f172a;
         margin-top: -1px;
     }}
+    
+    /* 比例尺通用规范美化 */
     .leaflet-control-scale {{
         margin-left: 14px !important;
+    }}
+    .leaflet-bottom.leaflet-left .leaflet-control-scale {{
         margin-bottom: 14px !important;
+    }}
+    .leaflet-top.leaflet-left .leaflet-control-scale {{
+        margin-top: 10px !important; /* 排列在自带缩放按钮下方 */
     }}
     .leaflet-control-scale-line {{
         background: rgba(255,255,255,0.92) !important;
         border: 2px solid #0f172a !important;
         border-top: none !important;
         color: #0f172a !important;
-        font-size: 12px !important;
+        font-size: 11px !important;
         font-weight: 700 !important;
         line-height: 1.2 !important;
-        padding: 3px 6px 4px 6px !important;
+        padding: 2px 5px 3px 5px !important;
         box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1) !important;
     }}
     </style>
@@ -445,11 +453,20 @@ def add_north_arrow_and_scale(m):
     <script>
     setTimeout(function() {{
         if (typeof {map_name} !== "undefined") {{
+            // 1. 在左下角添加比例尺
             L.control.scale({{
                 position: "bottomleft",
                 metric: true,
                 imperial: false,
-                maxWidth: 150
+                maxWidth: 140
+            }}).addTo({map_name});
+
+            // 2. 在左上角添加比例尺
+            L.control.scale({{
+                position: "topleft",
+                metric: true,
+                imperial: false,
+                maxWidth: 140
             }}).addTo({map_name});
         }}
     }}, 300);
@@ -847,7 +864,6 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
     current_gw_arr = None
     current_dem_arr = None
     
-    # 临时存放渲染图层的数值极值范围，供给图例面板使用
     pre_range, gw_range, dem_range = None, None, None
 
     if layer_choice in ["降水图", "三图叠加"]:
