@@ -1,6 +1,6 @@
 """
 甘肃省地下水-降水-高程多源数据可视化平台
-版本：GitHub 自动读取数据 + 可选手动上传 + 演示模式
+版本：GitHub 自动读取数据
 
 推荐 GitHub 仓库结构：
 
@@ -181,7 +181,6 @@ AUTO_PRECIP_DIR = BASE_DIR / "precip"
 AUTO_GW_DIR = BASE_DIR / "groundwater"
 AUTO_DEM_DIR = BASE_DIR / "dem"
 
-# 隐藏 Plotly 英文工具栏，避免出现 Reset axes 等英文提示
 PLOTLY_CONFIG = {"displayModeBar": False}
 
 
@@ -191,14 +190,6 @@ PLOTLY_CONFIG = {"displayModeBar": False}
 def safe_mkdir(path):
     os.makedirs(path, exist_ok=True)
     return path
-
-
-def save_uploaded_file(uploaded_file, out_dir):
-    safe_mkdir(out_dir)
-    out_path = os.path.join(out_dir, uploaded_file.name)
-    with open(out_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return out_path
 
 
 def unzip_shp(zip_file_path, out_dir):
@@ -227,25 +218,7 @@ def make_tif_dict_from_paths(paths):
     return dict(sorted(tif_dict.items(), key=lambda x: x[0]))
 
 
-def save_tif_files(uploaded_files, out_dir):
-    tif_dict = {}
-    if not uploaded_files:
-        return tif_dict
-
-    for i, uf in enumerate(uploaded_files, start=1):
-        path = save_uploaded_file(uf, out_dir)
-        year = extract_year(uf.name)
-        if year is None:
-            year = i
-        tif_dict[year] = path
-
-    return dict(sorted(tif_dict.items(), key=lambda x: x[0]))
-
-
 def find_auto_data():
-    """
-    自动查找 GitHub 仓库 data 目录中的数据。
-    """
     boundary_zip_list = sorted(list(AUTO_BOUNDARY_DIR.glob("*.zip")))
     pre_list = sorted(list(AUTO_PRECIP_DIR.glob("*.tif")) + list(AUTO_PRECIP_DIR.glob("*.tiff")))
     gw_list = sorted(list(AUTO_GW_DIR.glob("*.tif")) + list(AUTO_GW_DIR.glob("*.tiff")))
@@ -276,11 +249,6 @@ def read_boundary_from_zip_path(zip_path, work_dir):
         raise ValueError("边界 SHP 没有坐标系。请先在 ArcGIS/QGIS 中定义投影。")
 
     return gdf.dissolve().reset_index(drop=True)
-
-
-def read_boundary_from_uploaded_zip(uploaded_zip, work_dir):
-    zip_path = save_uploaded_file(uploaded_zip, os.path.join(work_dir, "boundary_zip"))
-    return read_boundary_from_zip_path(zip_path, work_dir)
 
 
 def crop_raster_by_boundary(raster_path, boundary_gdf):
@@ -341,22 +309,12 @@ def raster_stats(arr):
 
 def raster_to_wgs84(arr, transform, crs, max_size=300):
     height, width = arr.shape
-
-    # rasterio 的 array_bounds 返回顺序是：west, south, east, north
     west, south, east, north = array_bounds(height, width, transform)
 
     dst_transform, dst_width, dst_height = calculate_default_transform(
-        crs,
-        "EPSG:4326",
-        width,
-        height,
-        west,
-        south,
-        east,
-        north
+        crs, "EPSG:4326", width, height, west, south, east, north
     )
 
-    # 控制网页显示尺寸，避免 Streamlit Cloud 卡顿
     max_dim = max(dst_width, dst_height)
     if max_dim > max_size:
         scale = max_dim / max_size
@@ -364,50 +322,39 @@ def raster_to_wgs84(arr, transform, crs, max_size=300):
         new_height = max(1, int(dst_height / scale))
 
         dst_transform = dst_transform * Affine.scale(
-            dst_width / new_width,
-            dst_height / new_height
+            dst_width / new_width, dst_height / new_height
         )
-
         dst_width, dst_height = new_width, new_height
 
     nodata_value = -9999.0
-
     src_arr = arr.astype("float32")
     src_arr = np.where(np.isfinite(src_arr), src_arr, nodata_value)
-
     dst = np.full((dst_height, dst_width), nodata_value, dtype="float32")
 
     reproject(
-        source=src_arr,
-        destination=dst,
-        src_transform=transform,
-        src_crs=crs,
-        dst_transform=dst_transform,
-        dst_crs="EPSG:4326",
-        src_nodata=nodata_value,
-        dst_nodata=nodata_value,
+        source=src_arr, destination=dst,
+        src_transform=transform, src_crs=crs,
+        dst_transform=dst_transform, dst_crs="EPSG:4326",
+        src_nodata=nodata_value, dst_nodata=nodata_value,
         resampling=Resampling.bilinear
     )
 
     dst = np.where(dst == nodata_value, np.nan, dst)
-
-    # 这里也要注意顺序：west, south, east, north
     west, south, east, north = array_bounds(dst_height, dst_width, dst_transform)
-
-    # Folium 需要的是 [[south, west], [north, east]]
     bounds = [[south, west], [north, east]]
 
     return dst, bounds
 
 
-def array_to_png_data_uri(arr, cmap_name="Blues", opacity=0.78):
+def array_to_png_data_uri(arr, cmap_name="Blues", opacity=0.78, vmin=None, vmax=None):
     valid = arr[np.isfinite(arr)]
 
     if valid.size == 0:
         rgba = np.zeros((arr.shape[0], arr.shape[1], 4), dtype=np.uint8)
     else:
-        vmin = np.nanpercentile(valid, 2)
-        vmax = np.nanpercentile(valid, 98)
+        if vmin is None or vmax is None:
+            vmin = np.nanpercentile(valid, 2)
+            vmax = np.nanpercentile(valid, 98)
 
         if np.isclose(vmin, vmax):
             vmin = np.nanmin(valid)
@@ -429,151 +376,63 @@ def array_to_png_data_uri(arr, cmap_name="Blues", opacity=0.78):
     return f"data:image/png;base64,{encoded}"
 
 
-def build_map_legend_html(legend_type):
-    precip_items = [
-        ("#edf8fb", "< 200 mm"),
-        ("#b3cde3", "200 - 300 mm"),
-        ("#8c96c6", "300 - 400 mm"),
-        ("#5b8fd1", "400 - 500 mm"),
-        ("#08519c", "> 500 mm"),
-    ]
-    groundwater_items = [
-        ("#2b83ba", "< 0"),
-        ("#fee8c8", "0 - 500"),
-        ("#fdbb84", "500 - 1000"),
-        ("#ef6548", "1000 - 1500"),
-        ("#990000", "> 1500"),
-    ]
-    elevation_items = [
-        ("#2c7bb6", "低高程"),
-        ("#abd9e9", "中低高程"),
-        ("#ffffbf", "中高高程"),
-        ("#fdae61", "高高程"),
-        ("#d7191c", "最高高程"),
-    ]
-
-    def block(title, unit, items):
-        rows = ""
-        for color, label in items:
-            rows += (
-                '<div class="map-legend-row">'
-                f'<span class="map-legend-color" style="background:{color};"></span>'
-                f'<span>{label}</span>'
-                '</div>'
-            )
-        return (
-            '<div class="map-legend-section">'
-            f'<div class="map-legend-title">{title}</div>'
-            f'<div class="map-legend-unit">{unit}</div>'
-            f'{rows}'
-            '</div>'
-        )
-
-    if legend_type == "precip":
-        return block("降水量图例", "单位：mm", precip_items)
-    elif legend_type == "groundwater":
-        return block("地下水图例", "单位：栅格值", groundwater_items)
-    elif legend_type == "elevation":
-        return block("高程图例", "单位：m", elevation_items)
-    else:
-        return (
-            block("降水量图例", "单位：mm", precip_items)
-            + block("地下水图例", "单位：栅格值", groundwater_items)
-            + block("高程图例", "单位：m", elevation_items)
-        )
-
-
-def add_map_decoration(m, legend_type="precip"):
+def add_north_arrow_and_scale(m):
     map_name = m.get_name()
-    legend_html = build_map_legend_html(legend_type)
 
     control_html = f"""
     <style>
     .custom-north-arrow {{
         position: absolute;
-        top: 14px;
-        left: 14px;
+        top: 18px;
+        right: 18px;
         z-index: 9999;
-        width: 46px;
-        height: 70px;
-        background: rgba(255, 255, 255, 0.94);
-        border: 1px solid #9ca3af;
+        width: 54px;
+        height: 82px;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #cbd5e1;
         border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        font-family: 'Microsoft YaHei', Arial, sans-serif;
+        font-family: Arial, sans-serif;
         pointer-events: none;
     }}
     .custom-north-arrow .north-text {{
-        font-size: 17px;
-        font-weight: 900;
-        color: #111827;
+        font-size: 16px;
+        font-weight: 800;
+        color: #0f172a;
         line-height: 1;
         margin-bottom: 4px;
     }}
     .custom-north-arrow .north-triangle {{
         width: 0;
         height: 0;
-        border-left: 11px solid transparent;
-        border-right: 11px solid transparent;
-        border-bottom: 30px solid #111827;
+        border-left: 12px solid transparent;
+        border-right: 12px solid transparent;
+        border-bottom: 32px solid #0f172a;
     }}
     .custom-north-arrow .north-line {{
         width: 3px;
-        height: 12px;
-        background: #111827;
+        height: 14px;
+        background: #0f172a;
         margin-top: -1px;
     }}
-    .custom-map-legend {{
-        position: absolute;
-        right: 14px;
-        bottom: 54px;
-        z-index: 9999;
-        background: rgba(255, 255, 255, 0.94);
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.16);
-        padding: 8px 10px;
-        min-width: 132px;
-        max-width: 180px;
-        font-family: 'Microsoft YaHei', Arial, sans-serif;
-        color: #111827;
-        pointer-events: none;
-    }}
-    .map-legend-section {{ margin-bottom: 7px; }}
-    .map-legend-section:last-child {{ margin-bottom: 0; }}
-    .map-legend-title {{ font-size: 13px; font-weight: 800; margin-bottom: 2px; }}
-    .map-legend-unit {{ font-size: 11px; color: #64748b; margin-bottom: 4px; }}
-    .map-legend-row {{
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        line-height: 1.35;
-        white-space: nowrap;
-    }}
-    .map-legend-color {{
-        width: 16px;
-        height: 10px;
-        display: inline-block;
-        border: 1px solid rgba(0,0,0,0.18);
-    }}
     .leaflet-control-scale {{
-        margin-right: 14px !important;
+        margin-left: 14px !important;
         margin-bottom: 14px !important;
     }}
     .leaflet-control-scale-line {{
-        background: rgba(255,255,255,0.94) !important;
-        border: 2px solid #111827 !important;
+        background: rgba(255,255,255,0.92) !important;
+        border: 2px solid #0f172a !important;
         border-top: none !important;
-        color: #111827 !important;
+        color: #0f172a !important;
         font-size: 12px !important;
-        font-weight: 800 !important;
-        padding: 2px 6px 3px 6px !important;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15) !important;
+        font-weight: 700 !important;
+        line-height: 1.2 !important;
+        padding: 3px 6px 4px 6px !important;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1) !important;
     }}
     </style>
 
@@ -583,25 +442,126 @@ def add_map_decoration(m, legend_type="precip"):
         <div class="north-line"></div>
     </div>
 
-    <div class="custom-map-legend">
-        {legend_html}
-    </div>
-
     <script>
     setTimeout(function() {{
         if (typeof {map_name} !== "undefined") {{
             L.control.scale({{
-                position: "bottomright",
+                position: "bottomleft",
                 metric: true,
                 imperial: false,
-                maxWidth: 120
+                maxWidth: 150
             }}).addTo({map_name});
         }}
     }}, 300);
     </script>
     """
-
     m.get_root().html.add_child(folium.Element(control_html))
+    return m
+
+
+def add_legend_to_map(m, layer_choice, pre_range=None, gw_range=None, dem_range=None):
+    """
+    在 Folium 地图右下角动态注入高度美化的前端颜色条图例面板
+    """
+    legend_html = """
+    <style>
+    .map-legend-panel {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        z-index: 9999;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px 14px;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        width: 210px;
+        pointer-events: auto;
+    }
+    .legend-section {
+        margin-bottom: 12px;
+    }
+    .legend-section:last-child {
+        margin-bottom: 0;
+    }
+    .legend-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .legend-bar {
+        height: 10px;
+        border-radius: 3px;
+        width: 100%;
+        margin-bottom: 4px;
+    }
+    .legend-labels {
+        display: flex;
+        justify-content: space-between;
+        color: #64748b;
+        font-size: 11px;
+    }
+    </style>
+    <div class="map-legend-panel">
+    """
+    
+    has_any_layer = False
+    
+    # 1. 降水量图例 (Matplotlib 'Blues')
+    if (layer_choice in ["降水图", "三图叠加"]) and pre_range:
+        vmin, vmax = pre_range
+        legend_html += f"""
+        <div class="legend-section">
+            <div class="legend-title">💧 降水量 (mm)</div>
+            <div class="legend-bar" style="background: linear-gradient(to right, #f7fbff, #08306b);"></div>
+            <div class="legend-labels">
+                <span>{vmin:.1f}</span>
+                <span>{vmax:.1f}</span>
+            </div>
+        </div>
+        """
+        has_any_layer = True
+
+    # 2. 地下水图例 (Matplotlib 'RdYlBu')
+    if (layer_choice in ["地下水变化图", "三图叠加"]) and gw_range:
+        vmin, vmax = gw_range
+        legend_html += f"""
+        <div class="legend-section">
+            <div class="legend-title">📉 地下水变化量 (m)</div>
+            <div class="legend-bar" style="background: linear-gradient(to right, #d73027, #fee090, #4575b4);"></div>
+            <div class="legend-labels">
+                <span>{vmin:.2f} (下降)</span>
+                <span>{vmax:.2f} (上升)</span>
+            </div>
+        </div>
+        """
+        has_any_layer = True
+
+    # 3. DEM高程图例 (Matplotlib 'terrain')
+    if (layer_choice in ["高程图", "三图叠加"]) and dem_range:
+        vmin, vmax = dem_range
+        legend_html += f"""
+        <div class="legend-section">
+            <div class="legend-title">⛰️ DEM 高程 (m)</div>
+            <div class="legend-bar" style="background: linear-gradient(to right, #333399, #009933, #ffff99, #996633, #ffffff);"></div>
+            <div class="legend-labels">
+                <span>{vmin:.0f}</span>
+                <span>{vmax:.0f}</span>
+            </div>
+        </div>
+        """
+        has_any_layer = True
+
+    if not has_any_layer:
+        legend_html += "<div style='color:#64748b; font-size:11px;'>未激活可视化图层</div>"
+
+    legend_html += "</div>"
+    m.get_root().html.add_child(folium.Element(legend_html))
     return m
 
 
@@ -610,7 +570,6 @@ def make_base_map(boundary_gdf):
     minx, miny, maxx, maxy = boundary_wgs.total_bounds
     center = [(miny + maxy) / 2, (minx + maxx) / 2]
 
-    # 纯白背景，不加载英文在线底图；不添加白色矩形，避免遮挡 TIF 图层
     m = folium.Map(
         location=center,
         zoom_start=6,
@@ -620,7 +579,6 @@ def make_base_map(boundary_gdf):
         attribution_control=False
     )
 
-    # 只通过 CSS 改背景颜色，不作为地图图层参与叠加
     m.get_root().html.add_child(
         folium.Element(
             """
@@ -644,13 +602,22 @@ def make_base_map(boundary_gdf):
     ).add_to(m)
 
     m.fit_bounds([[miny, minx], [maxy, maxx]])
+    add_north_arrow_and_scale(m)
     return m
 
 
 def add_raster_layer(m, raster_path, boundary_gdf, layer_name, cmap_name, opacity):
     arr, transform, crs, profile = crop_raster_by_boundary(raster_path, boundary_gdf)
     arr_wgs, bounds = raster_to_wgs84(arr, transform, crs)
-    png_uri = array_to_png_data_uri(arr_wgs, cmap_name=cmap_name, opacity=opacity)
+    
+    valid = arr_wgs[np.isfinite(arr_wgs)]
+    if valid.size > 0:
+        vmin = float(np.nanpercentile(valid, 2))
+        vmax = float(np.nanpercentile(valid, 98))
+    else:
+        vmin, vmax = 0.0, 1.0
+
+    png_uri = array_to_png_data_uri(arr_wgs, cmap_name=cmap_name, opacity=opacity, vmin=vmin, vmax=vmax)
 
     folium.raster_layers.ImageOverlay(
         image=png_uri,
@@ -662,15 +629,11 @@ def add_raster_layer(m, raster_path, boundary_gdf, layer_name, cmap_name, opacit
         zindex=2
     ).add_to(m)
 
-    return arr
+    return arr, vmin, vmax
 
 
 @st.cache_data(show_spinner=False)
 def build_yearly_table_cached(pre_items, gw_items, dem_path, boundary_zip_path):
-    """
-    缓存自动读取数据的年度统计，提升网页刷新速度。
-    这里只对 GitHub 自动数据模式使用。
-    """
     with tempfile.TemporaryDirectory() as tmpdir:
         boundary_gdf = read_boundary_from_zip_path(boundary_zip_path, tmpdir)
         pre_dict = dict(pre_items)
@@ -752,77 +715,6 @@ def elevation_pie_df(arr):
     return pd.DataFrame({"类型": names, "像元数": zones})
 
 
-def demo_dataframe():
-    years = list(range(2012, 2022))
-    rainfall = [513.7, 562.1, 498.3, 610.5, 535.6, 505.2, 462.4, 438.9, 520.1, 488.2]
-    groundwater = [0.05, 0.21, -0.02, 0.32, 0.08, 0.12, -0.10, 0.00, 0.16, -0.04]
-    elevation = [1876.2] * 10
-
-    return pd.DataFrame(
-        {
-            "年份": years,
-            "降水量(mm)": rainfall,
-            "地下水变化量(m)": groundwater,
-            "平均高程(m)": elevation,
-            "高程最小值(m)": [650.0] * 10,
-            "高程最大值(m)": [4800.0] * 10,
-            "有效像元数": [10000] * 10
-        }
-    )
-
-
-def demo_map():
-    # 演示模式也使用纯白背景，不加载英文在线底图
-    m = folium.Map(
-        location=[38.5, 101.5],
-        zoom_start=6,
-        tiles=None,
-        control_scale=False,
-        zoom_control=True,
-        attribution_control=False
-    )
-
-    m.get_root().html.add_child(
-        folium.Element(
-            """
-            <style>
-            .leaflet-container {
-                background: #ffffff !important;
-            }
-            </style>
-            """
-        )
-    )
-
-    polygon = [
-        [40.0, 93.5],
-        [39.7, 96.0],
-        [40.5, 98.2],
-        [39.1, 100.0],
-        [39.6, 102.2],
-        [38.5, 104.5],
-        [36.5, 106.0],
-        [35.0, 105.0],
-        [34.6, 102.8],
-        [36.0, 100.0],
-        [37.0, 97.0],
-        [38.2, 94.5]
-    ]
-
-    folium.Polygon(
-        locations=polygon,
-        color="#111827",
-        weight=2,
-        fill=True,
-        fill_color="#60a5fa",
-        fill_opacity=0.45,
-        tooltip="甘肃省示意范围"
-    ).add_to(m)
-
-    folium.LayerControl(collapsed=False).add_to(m)
-    return m
-
-
 def card_start(title):
     st.markdown(f'<div class="card"><div class="card-title">{title}</div>', unsafe_allow_html=True)
 
@@ -832,7 +724,7 @@ def card_end():
 
 
 # =========================================================
-# 5. 左侧栏：数据模式和控制
+# 5. 左侧栏
 # =========================================================
 auto_info = find_auto_data()
 auto_data_ready = (
@@ -844,17 +736,7 @@ auto_data_ready = (
 
 with st.sidebar:
     st.markdown("## 数据来源")
-
-    if auto_data_ready:
-        default_mode = "GitHub 自动读取"
-    else:
-        default_mode = "演示模式"
-
-    data_mode = st.radio(
-        "选择数据模式",
-        ["GitHub 自动读取", "手动上传", "演示模式"],
-        index=["GitHub 自动读取", "手动上传", "演示模式"].index(default_mode)
-    )
+    st.markdown("**GitHub 自动读取**")
 
     if auto_data_ready:
         st.markdown(
@@ -873,47 +755,17 @@ with st.sidebar:
         st.markdown(
             """
             <div class="warning-box">
-            未检测到完整 GitHub 数据。请检查 data/boundary、data/precip、data/groundwater、data/dem 目录。
+            未检测到完整 GitHub 数据。请检查 boundary、precip、groundwater、dem 文件夹。
             </div>
             """,
             unsafe_allow_html=True
-        )
-
-    boundary_zip_upload = None
-    pre_files_upload = None
-    gw_files_upload = None
-    dem_file_upload = None
-
-    if data_mode == "手动上传":
-        st.markdown("## 手动上传")
-
-        boundary_zip_upload = st.file_uploader(
-            "1. 上传甘肃省边界 SHP 压缩包（zip）",
-            type=["zip"]
-        )
-
-        pre_files_upload = st.file_uploader(
-            "2. 上传降水 TIF 文件",
-            type=["tif", "tiff"],
-            accept_multiple_files=True
-        )
-
-        gw_files_upload = st.file_uploader(
-            "3. 上传地下水变化 TIF 文件",
-            type=["tif", "tiff"],
-            accept_multiple_files=True
-        )
-
-        dem_file_upload = st.file_uploader(
-            "4. 上传 DEM 高程 TIF 文件",
-            type=["tif", "tiff"]
         )
 
     st.markdown("## 显示设置")
 
     available_years = sorted(set(auto_info["pre_dict"].keys()) & set(auto_info["gw_dict"].keys()))
     if not available_years:
-        available_years = list(range(2012, 2022))
+        available_years = list(range(2012, 2023))
 
     selected_year_sidebar = st.selectbox(
         "选择年份",
@@ -922,7 +774,7 @@ with st.sidebar:
     )
 
     layer_choice = st.radio(
-        "底图选择",
+        "图层选择",
         ["降水图", "地下水变化图", "高程图", "三图叠加"],
         index=0
     )
@@ -994,33 +846,33 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
     current_pre_arr = None
     current_gw_arr = None
     current_dem_arr = None
+    
+    # 临时存放渲染图层的数值极值范围，供给图例面板使用
+    pre_range, gw_range, dem_range = None, None, None
 
     if layer_choice in ["降水图", "三图叠加"]:
-        current_pre_arr = add_raster_layer(
+        current_pre_arr, p_min, p_max = add_raster_layer(
             fmap, pre_dict[selected_year], boundary_gdf,
             f"{selected_year} 年降水量", "Blues", opacity
         )
+        pre_range = (p_min, p_max)
 
     if layer_choice in ["地下水变化图", "三图叠加"]:
-        current_gw_arr = add_raster_layer(
+        current_gw_arr, g_min, g_max = add_raster_layer(
             fmap, gw_dict[selected_year], boundary_gdf,
             f"{selected_year} 年地下水变化", "RdYlBu", opacity
         )
+        gw_range = (g_min, g_max)
 
     if layer_choice in ["高程图", "三图叠加"]:
-        current_dem_arr = add_raster_layer(
+        current_dem_arr, d_min, d_max = add_raster_layer(
             fmap, dem_path, boundary_gdf,
             "DEM 高程", "terrain", opacity
         )
+        dem_range = (d_min, d_max)
 
-    # 根据当前图层选择添加中文图例、左上角指北针、右下角比例尺
-    legend_type_map = {
-        "降水图": "precip",
-        "地下水变化图": "groundwater",
-        "高程图": "elevation",
-        "三图叠加": "overlay"
-    }
-    add_map_decoration(fmap, legend_type_map.get(layer_choice, "precip"))
+    # 注入动态联动图例
+    add_legend_to_map(fmap, layer_choice, pre_range, gw_range, dem_range)
 
     folium.LayerControl(collapsed=False).add_to(fmap)
 
@@ -1033,10 +885,7 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
 
     if use_cache_table and boundary_zip_path is not None:
         yearly_df = build_yearly_table_cached(
-            tuple(pre_dict.items()),
-            tuple(gw_dict.items()),
-            dem_path,
-            boundary_zip_path
+            tuple(pre_dict.items()), tuple(gw_dict.items()), dem_path, boundary_zip_path
         )
     else:
         yearly_df = build_yearly_table(pre_dict, gw_dict, dem_path, boundary_gdf)
@@ -1068,22 +917,14 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
 
         with chart_a:
             fig_rain = px.line(
-                yearly_df,
-                x="年份",
-                y="降水量(mm)",
-                markers=True,
-                title="年降水量变化趋势"
+                yearly_df, x="年份", y="降水量(mm)", markers=True, title="年降水量变化趋势"
             )
             fig_rain.update_layout(height=330, margin=dict(l=10, r=10, t=50, b=10))
             st.plotly_chart(fig_rain, use_container_width=True, config=PLOTLY_CONFIG)
 
         with chart_b:
             fig_gw = px.line(
-                yearly_df,
-                x="年份",
-                y="地下水变化量(m)",
-                markers=True,
-                title="年地下水变化趋势"
+                yearly_df, x="年份", y="地下水变化量(m)", markers=True, title="年地下水变化趋势"
             )
             fig_gw.add_hline(y=0, line_dash="dash", line_color="gray")
             fig_gw.update_layout(height=330, margin=dict(l=10, r=10, t=50, b=10))
@@ -1095,16 +936,8 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
 
     with row2_col1:
         card_start(f"降水量 vs 地下水变化（{yearly_df['年份'].min()}-{yearly_df['年份'].max()}）")
-        if len(yearly_df) >= 2:
-            corr = yearly_df[["降水量(mm)", "地下水变化量(m)"]].corr().iloc[0, 1]
-        else:
-            corr = np.nan
-
         fig_scatter = px.scatter(
-            yearly_df,
-            x="降水量(mm)",
-            y="地下水变化量(m)",
-            text="年份",
+            yearly_df, x="降水量(mm)", y="地下水变化量(m)", text="年份",
             trendline="ols" if len(yearly_df) >= 3 else None
         )
         fig_scatter.update_traces(textposition="top center", marker=dict(size=10))
@@ -1115,12 +948,7 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
     with row2_col2:
         card_start("地下水变化分区占比")
         pie_df = groundwater_pie_df(current_gw_arr, stable_threshold)
-        fig_pie = px.pie(
-            pie_df,
-            names="类型",
-            values="像元数",
-            hole=0.45
-        )
+        fig_pie = px.pie(pie_df, names="类型", values="像元数", hole=0.45)
         fig_pie.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_pie, use_container_width=True, config=PLOTLY_CONFIG)
         card_end()
@@ -1136,147 +964,39 @@ def render_dashboard(boundary_gdf, pre_dict, gw_dict, dem_path, selected_year, s
 
         csv = show_df.to_csv(index=False, encoding="utf-8-sig")
         st.download_button(
-            "导出 CSV",
-            data=csv,
-            file_name="甘肃省_降水_地下水_高程_融合统计表.csv",
-            mime="text/csv"
+            "导出 CSV", data=csv, file_name="甘肃省_降水_地下水_高程_融合统计表.csv", mime="text/csv"
         )
         card_end()
 
     with row3_col2:
         card_start("高程分区占比")
         elev_df = elevation_pie_df(current_dem_arr)
-        fig_elev = px.pie(
-            elev_df,
-            names="类型",
-            values="像元数"
-        )
+        fig_elev = px.pie(elev_df, names="类型", values="像元数")
         fig_elev.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_elev, use_container_width=True, config=PLOTLY_CONFIG)
         card_end()
 
 
 # =========================================================
-# 8. 主程序
+# 8. 主程序：仅 GitHub 自动读取
 # =========================================================
 try:
-    if data_mode == "GitHub 自动读取":
-        if not auto_data_ready:
-            st.error("GitHub data 目录中的数据不完整。请检查 data/boundary、data/precip、data/groundwater、data/dem。")
-            st.stop()
+    if not auto_data_ready:
+        st.error("GitHub 数据不完整。请检查 boundary、precip、groundwater、dem 文件夹是否完整上传。")
+        st.stop()
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            boundary_gdf = read_boundary_from_zip_path(auto_info["boundary_zip"], tmpdir)
-            render_dashboard(
-                boundary_gdf=boundary_gdf,
-                pre_dict=auto_info["pre_dict"],
-                gw_dict=auto_info["gw_dict"],
-                dem_path=auto_info["dem_path"],
-                selected_year=selected_year_sidebar,
-                source_note="当前使用 GitHub 仓库 data 目录中的内置数据，用户打开网页即可查看。",
-                use_cache_table=True,
-                boundary_zip_path=auto_info["boundary_zip"]
-            )
-
-    elif data_mode == "手动上传":
-        if not all([boundary_zip_upload, pre_files_upload, gw_files_upload, dem_file_upload]):
-            st.info("请在左侧上传边界 zip、降水 TIF、地下水 TIF 和 DEM TIF。")
-            st.stop()
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            work_dir = safe_mkdir(os.path.join(tmpdir, "manual_upload"))
-            boundary_gdf = read_boundary_from_uploaded_zip(boundary_zip_upload, work_dir)
-            pre_dict = save_tif_files(pre_files_upload, os.path.join(work_dir, "pre"))
-            gw_dict = save_tif_files(gw_files_upload, os.path.join(work_dir, "gw"))
-            dem_path = save_uploaded_file(dem_file_upload, os.path.join(work_dir, "dem"))
-
-            render_dashboard(
-                boundary_gdf=boundary_gdf,
-                pre_dict=pre_dict,
-                gw_dict=gw_dict,
-                dem_path=dem_path,
-                selected_year=selected_year_sidebar,
-                source_note="当前使用手动上传数据。"
-            )
-
-    else:
-        st.markdown(
-            '<div class="warning-box">当前为演示模式：页面使用模拟数据展示效果。上传或放入 GitHub 数据后，可切换为真实数据模式。</div>',
-            unsafe_allow_html=True
+    with tempfile.TemporaryDirectory() as tmpdir:
+        boundary_gdf = read_boundary_from_zip_path(auto_info["boundary_zip"], tmpdir)
+        render_dashboard(
+            boundary_gdf=boundary_gdf,
+            pre_dict=auto_info["pre_dict"],
+            gw_dict=auto_info["gw_dict"],
+            dem_path=auto_info["dem_path"],
+            selected_year=selected_year_sidebar,
+            source_note="当前使用 GitHub 仓库中的内置数据，用户打开网页即可查看。",
+            use_cache_table=True,
+            boundary_zip_path=auto_info["boundary_zip"]
         )
-
-        yearly_df = demo_dataframe()
-        selected_year = selected_year_sidebar if selected_year_sidebar in yearly_df["年份"].tolist() else yearly_df["年份"].iloc[-1]
-
-        top1, top2, top3, top4 = st.columns(4)
-        with top1:
-            st.markdown('<div class="metric-card"><div class="metric-label">匹配年份</div><div class="metric-value">10 年</div></div>', unsafe_allow_html=True)
-        with top2:
-            st.markdown(f'<div class="metric-card"><div class="metric-label">当前年份</div><div class="metric-value">{selected_year}</div></div>', unsafe_allow_html=True)
-        with top3:
-            value = yearly_df.loc[yearly_df["年份"] == selected_year, "降水量(mm)"].iloc[0]
-            st.markdown(f'<div class="metric-card"><div class="metric-label">降水均值</div><div class="metric-value">{value:.1f} mm</div></div>', unsafe_allow_html=True)
-        with top4:
-            value = yearly_df.loc[yearly_df["年份"] == selected_year, "地下水变化量(m)"].iloc[0]
-            st.markdown(f'<div class="metric-card"><div class="metric-label">地下水变化均值</div><div class="metric-value">{value:.2f} m</div></div>', unsafe_allow_html=True)
-
-        row1_col1, row1_col2 = st.columns([1.06, 1.72])
-
-        with row1_col1:
-            card_start(f"甘肃省空间数据展示（{selected_year}年）")
-            st_folium(demo_map(), width=None, height=430)
-            card_end()
-
-        with row1_col2:
-            card_start("10 年变化趋势")
-            chart_a, chart_b = st.columns(2)
-
-            with chart_a:
-                fig_rain = px.line(yearly_df, x="年份", y="降水量(mm)", markers=True, title="年降水量变化趋势")
-                fig_rain.update_layout(height=330, margin=dict(l=10, r=10, t=50, b=10))
-                st.plotly_chart(fig_rain, use_container_width=True, config=PLOTLY_CONFIG)
-
-            with chart_b:
-                fig_gw = px.line(yearly_df, x="年份", y="地下水变化量(m)", markers=True, title="年地下水变化趋势")
-                fig_gw.add_hline(y=0, line_dash="dash", line_color="gray")
-                fig_gw.update_layout(height=330, margin=dict(l=10, r=10, t=50, b=10))
-                st.plotly_chart(fig_gw, use_container_width=True, config=PLOTLY_CONFIG)
-
-            card_end()
-
-        row2_col1, row2_col2 = st.columns([1, 1])
-
-        with row2_col1:
-            card_start("降水量 vs 地下水变化")
-            corr = yearly_df[["降水量(mm)", "地下水变化量(m)"]].corr().iloc[0, 1]
-            fig_scatter = px.scatter(yearly_df, x="降水量(mm)", y="地下水变化量(m)", text="年份", trendline="ols")
-            fig_scatter.update_traces(textposition="top center", marker=dict(size=10))
-            fig_scatter.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(fig_scatter, use_container_width=True, config=PLOTLY_CONFIG)
-            card_end()
-
-        with row2_col2:
-            card_start("地下水变化分区占比")
-            pie_df = pd.DataFrame({"类型": ["上升区", "稳定区", "下降区"], "像元数": [2830, 4670, 2500]})
-            fig_pie = px.pie(pie_df, names="类型", values="像元数", hole=0.45)
-            fig_pie.update_layout(height=330, margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(fig_pie, use_container_width=True, config=PLOTLY_CONFIG)
-            card_end()
-
-        row3_col1, row3_col2 = st.columns([1.38, 1])
-
-        with row3_col1:
-            card_start("多源数据融合统计表（区域平均值）")
-            st.dataframe(yearly_df.round(3), use_container_width=True, height=310)
-            card_end()
-
-        with row3_col2:
-            card_start("高程分区占比")
-            elev_df = pd.DataFrame({"类型": [">3000m", "2000-3000m", "1000-2000m", "<1000m"], "像元数": [2750, 3510, 2480, 1260]})
-            fig_elev = px.pie(elev_df, names="类型", values="像元数")
-            fig_elev.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(fig_elev, use_container_width=True, config=PLOTLY_CONFIG)
-            card_end()
 
 except Exception as e:
     st.error("程序运行出错，请检查 SHP/TIF 坐标系、文件格式、文件名年份是否正确。")
@@ -1289,15 +1009,10 @@ except Exception as e:
 with st.expander("方法说明"):
     st.markdown(
         """
-        本平台支持三种数据模式：
+        本平台仅保留 **GitHub 自动读取** 模式。用户打开网页后，系统会自动读取 GitHub 仓库中的边界、降水、地下水和 DEM 数据。
 
-        1. **GitHub 自动读取**：自动读取仓库中的 SHP zip、降水 TIF、地下水 TIF 和 DEM TIF；
-        2. **手动上传**：用户在网页左侧上传数据；
-        3. **演示模式**：没有真实数据时展示页面效果。
-
-        当前推荐 GitHub 数据目录结构：
-
-        ```text
+        推荐 GitHub 数据目录结构：
+```text
         boundary/
         └─ gansu_boundary.zip
 
@@ -1314,7 +1029,6 @@ with st.expander("方法说明"):
         dem/
         └─ dem_gansu.tif
         ```
-
-        文件名里必须包含年份，例如 `2012`、`2013`，系统会自动按年份匹配降水和地下水 TIF。
+        文件名里必须包含年份，系统会自动按年份匹配降水和地下水 TIF。
         """
     )
